@@ -1,12 +1,14 @@
+#!/usr/bin/env ruby
+
 require 'rubygems'
-require 'open-uri'
 require 'zlib'
 require 'yajl'
  
-gz = open('http://data.githubarchive.org/2012-03-11-12.json.gz')
-js = Zlib::GzipReader.new(gz).read
+Dir.glob('data/*.json.gz').each do |f|
+  gz = open(f)
+  js = Zlib::GzipReader.new(gz).read
  
-Yajl::Parser.parse(js) do |event|
-  str = Yajl::Encoder.encode(event)
-  puts str
+  Yajl::Parser.parse(js) do |event|
+    puts Yajl::Encoder.encode(event)
+  end
 end
