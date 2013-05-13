@@ -2,8 +2,11 @@ register /me/Software/elephant-bird/pig/target/elephant-bird-pig-3.0.6-SNAPSHOT.
 register /me/Software/pig/build/ivy/lib/Pig/json-simple-1.1.jar
 set elephantbird.jsonloader.nestedLoad 'true'
 
+rmf /tmp/FollowEvent.json
 
-github_events = load 'data/*.newline.json' using com.twitter.elephantbird.pig.load.JsonLoader() as json:map[];
+set default_parallel 10
+
+github_events = load '/tmp/newline.json' using com.twitter.elephantbird.pig.load.JsonLoader() as json:map[];
 
 SPLIT github_events INTO CommitCommentEvent IF $0#'type' == 'CommitCommentEvent',
                          CreateEvent IF $0#'type'        == 'CreateEvent',
@@ -24,24 +27,24 @@ SPLIT github_events INTO CommitCommentEvent IF $0#'type' == 'CommitCommentEvent'
                          TeamAddEvent IF $0#'type'       == 'TeamAddEvent',
                          WatchEvent IF $0#'type'         == 'WatchEvent';
 
-STORE CommitCommentEvent INTO '/tmp/CommitCommentEvent.json';
-STORE CreateEvent INTO '/tmp/CreateEvent.json';
-STORE DeleteEvent INTO '/tmp/DeleteEvent.json';
-STORE DownloadEvent INTO '/tmp/DownloadEvent.json';
-STORE FollowEvent INTO '/tmp/FollowEvent.json';
-STORE ForkEvent INTO '/tmp/ForkEvent.json';
-STORE ForkApplyEvent INTO '/tmp/ForkApplyEvent.json';
-STORE GistEvent INTO '/tmp/GistEvent.json';
-STORE GollumEvent INTO '/tmp/GollumEvent.json';
-STORE IssueCommentEvent INTO '/tmp/IssueCommentEvent.json';
-STORE IssuesEvent INTO '/tmp/IssuesEvent.json';
-STORE MemberEvent INTO '/tmp/MemberEvent.json';
-STORE PublicEvent INTO '/tmp/PublicEvent.json';
-STORE PullRequestEvent INTO '/tmp/PullRequestEvent.json';
-STORE PullRequestReviewCommentEvent INTO '/tmp/PullRequestReviewCommentEvent.json';
-STORE PushEvent INTO '/tmp/PushEvent.json';
-STORE TeamAddEvent INTO '/tmp/TeamAddEvent.json';
-STORE WatchEvent INTO '/tmp/WatchEvent.json';
+STORE CommitCommentEvent INTO '/tmp/CommitCommentEvent' USING PigStorage('\t','-schema');
+STORE CreateEvent INTO '/tmp/CreateEvent' USING PigStorage('\t','-schema');
+STORE DeleteEvent INTO '/tmp/DeleteEvent' USING PigStorage('\t','-schema');
+STORE DownloadEvent INTO '/tmp/DownloadEvent' USING PigStorage('\t','-schema');
+STORE FollowEvent INTO '/tmp/FollowEvent' USING PigStorage('\t','-schema');
+STORE ForkEvent INTO '/tmp/ForkEvent' USING PigStorage('\t','-schema');
+STORE ForkApplyEvent INTO '/tmp/ForkApplyEvent' USING PigStorage('\t','-schema');
+STORE GistEvent INTO '/tmp/GistEvent' USING PigStorage('\t','-schema');
+STORE GollumEvent INTO '/tmp/GollumEvent' USING PigStorage('\t','-schema');
+STORE IssueCommentEvent INTO '/tmp/IssueCommentEvent' USING PigStorage('\t','-schema');
+STORE IssuesEvent INTO '/tmp/IssuesEvent' USING PigStorage('\t','-schema');
+STORE MemberEvent INTO '/tmp/MemberEvent' USING PigStorage('\t','-schema');
+STORE PublicEvent INTO '/tmp/PublicEvent' USING PigStorage('\t','-schema');
+STORE PullRequestEvent INTO '/tmp/PullRequestEvent' USING PigStorage('\t','-schema');
+STORE PullRequestReviewCommentEvent INTO '/tmp/PullRequestReviewCommentEvent' USING PigStorage('\t','-schema');
+STORE PushEvent INTO '/tmp/PushEvent' USING PigStorage('\t','-schema');
+STORE TeamAddEvent INTO '/tmp/TeamAddEvent' USING PigStorage('\t','-schema');
+STORE WatchEvent INTO '/tmp/WatchEvent' USING PigStorage('\t','-schema');
 
 
 
