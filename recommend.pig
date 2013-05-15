@@ -56,13 +56,13 @@ store distances into '/tmp/distances.txt';
 pairs_and_distances = JOIN distances BY (follower1, follower2), 
                                pairs BY (elem1.follower, elem2.follower);
 weighted_ratings = FOREACH pairs_and_distances GENERATE follower1 as login, 
-                                                        elem2.repo as repo,
+                                                        elem2.repo as repo, distance as distance,
                                                         elem2.rating * distance AS weighted_rating;
 store weighted_ratings into '/tmp/weighted_ratings.txt';
--- weighted_ratings = LOAD '/tmp/weighted_ratings.txt' AS (login:chararray, repo:chararray, weighted_rating:double);
+-- weighted_ratings = LOAD '/tmp/weighted_ratings.txt' AS (login:chararray, repo:chararray, distance:double, weighted_rating:double);
 /* Having weighted ratings, now group by follower1 and create an ordered list - his recommendations */
 total_weighted_ratings = FOREACH (GROUP weighted_ratings BY (login, repo)) GENERATE FLATTEN(group) as (login, repo),
-                                                                    SUM(weighted_ratings.weighted_rating) AS rating_total;
+                                                                    SUM(weighted_ratings.weighted_rating)/SUM(weighted_ratings.distance) AS rating_total;
 
 recommendations = FOREACH (GROUP total_weighted_ratings BY login) {
   sorted = ORDER total_weighted_ratings BY rating_total DESC;
