@@ -2,7 +2,7 @@ register 'distance.py' using jython as funcs;
 register piggybank.jar
 register datafu-0.0.9-SNAPSHOT.jar;
 
-set default_parallel 100
+set default_parallel 50
 set mapred.child.java.opts -Xmx2048m
 
 rmf /tmp/differences.txt
@@ -36,17 +36,17 @@ download_ratings = FOREACH download_events GENERATE (chararray)$0#'actor_attribu
                                                     StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
                                                     1.0 AS rating;
 /* Create issues events - implies a user has already downloaded/forked and tried the software */
-issues_events = LOAD 's3://github-explorer/IssuesEvent' AS (json: map[]);
+/*issues_events = LOAD 's3://github-explorer/IssuesEvent' AS (json: map[]);
 issues_ratings = FOREACH issues_events GENERATE (chararray)$0#'actor_attributes'#'login' AS follower:chararray,
                                                 StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
                                                 3.0 AS rating;
-/* Create repository event - strongest association with a repo possible */
-create_events = LOAD 's3://github-explorer/CreatEvent' AS (json: map[]);
+*//* Create repository event - strongest association with a repo possible */
+/*create_events = LOAD 's3://github-explorer/CreatEvent' AS (json: map[]);
 create_ratings = FOREACH create_events GENERATE (chararray)$0#'actor_attributes'#'login' AS follower:chararray,
                                                 StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
                                                 4.0 AS rating;
-
-all_ratings = UNION watch_ratings, fork_ratings, download_ratings, issues_ratings;
+*/
+all_ratings = UNION watch_ratings, fork_ratings, download_ratings;
 all_ratings = FILTER all_ratings BY (follower IS NOT NULL) AND (repo IS NOT NULL);
 front_pairs = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(all_ratings));
 back_pairs = FOREACH front_pairs GENERATE elem1 as elem2, elem2 as elem1;
