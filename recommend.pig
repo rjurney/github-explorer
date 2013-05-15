@@ -26,13 +26,29 @@ watch_ratings = FOREACH watch_events GENERATE (chararray)$0#'actor'#'login' AS f
                                               1.0 AS rating;
 /* Fork events happen whenever a github project is 'forked' */
 -- fork_event = LOAD '/tmp/ForkEvent';
-fork_event = LOAD 's3://github-explorer/ForkEvent' AS (json: map[]);
-fork_ratings = FOREACH fork_event GENERATE (chararray)$0#'actor'#'login' AS follower:chararray,
+fork_events = LOAD 's3://github-explorer/ForkEvent' AS (json: map[]);
+fork_ratings = FOREACH fork_events GENERATE (chararray)$0#'actor'#'login' AS follower:chararray,
                                            (chararray)$0#'repo'#'name' as repo:chararray,
                                            2.0 AS rating;
-all_ratings = UNION watch_ratings, fork_ratings;
+/* Download events, whenever a user downloads a tarball of a repo */
+download_events = LOAD 's3://github-explorer/DownloadEvent' AS (json: map[]);
+download_ratings = FOREACH download_events GENERATE (chararray)$0#'actor_attributes'#'login' AS follower:chararray,
+                                                    StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
+                                                    1.0 AS rating;
+/* Create issues events - implies a user has already downloaded/forked and tried the software */
+issues_events = LOAD 's3://github-explorer/IssuesEvent' AS (json: map[]);
+issues_ratings = FOREACH issues_events GENERATE (chararray)$0#'actor_attributes'#'login' AS follower:chararray,
+                                                StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
+                                                3.0 AS rating;
+/* Create repository event - strongest association with a repo possible */
+create_events = LOAD 's3://github-explorer/CreatEvent' AS (json: map[]);
+create_ratings = FOREACH create_events GENERATE (chararray)$0#'actor_attributes'#'login' AS follower:chararray,
+                                                StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
+                                                4.0 AS rating;
+
+all_ratings = UNION watch_ratings, fork_ratings, download_ratings, issues_ratings;
 all_ratings = FILTER all_ratings BY (follower IS NOT NULL) AND (repo IS NOT NULL);
-Front_pairs = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(all_ratings));
+front_pairs = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(all_ratings));
 back_pairs = FOREACH front_pairs GENERATE elem1 as elem2, elem2 as elem1;
 pairs = UNION front_pairs, back_pairs;
 /* 
