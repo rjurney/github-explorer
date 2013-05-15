@@ -32,7 +32,9 @@ fork_ratings = FOREACH fork_event GENERATE (chararray)$0#'actor'#'login' AS foll
                                            2.0 AS rating;
 all_ratings = UNION watch_ratings, fork_ratings;
 all_ratings = FILTER all_ratings BY (follower IS NOT NULL) AND (repo IS NOT NULL);
-pairs = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(all_ratings));
+Front_pairs = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(all_ratings));
+back_pairs = FOREACH front_pairs GENERATE elem1 as elem2, elem2 as elem1;
+pairs = UNION front_pairs, back_pairs;
 /* 
 differences: {
   datafu.pig.bags.unorderedpairs_all_ratings_15::elem1: (follower: chararray,repo: chararray,rating: double),
