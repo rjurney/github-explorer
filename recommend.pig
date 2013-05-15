@@ -4,7 +4,11 @@ register datafu-0.0.9-SNAPSHOT.jar;
 
 set default_parallel 100
 set mapred.child.java.opts -Xmx2048m
+
+rmf /tmp/differences.txt
 rmf /tmp/distances.txt
+rmf /tmp/weighted_ratings.txt
+rmf /tmp/recommendations.txt
 
 DEFINE POW org.apache.pig.piggybank.evaluation.math.POW();
 DEFINE ABS org.apache.pig.piggybank.evaluation.math.ABS();
@@ -49,16 +53,21 @@ store distances into '/tmp/distances.txt';
 -- distances = LOAD 's3n://github-explorer/distances.txt' AS (follower1:chararray, follower2:chararray, distance:double);
 
 /* Now JOIN distances back to the pairs of co-followers to weight those ratings. */
-pairs_and_distances = JOIN distances BY (follower1, follower2), pairs BY (elem1.follower, elem2.follower);
-weighted_ratings = FOREACH pairs_and_distances GENERATE follower1, 
-                                                        follower2, 
-                                                        repo,
+pairs_and_distances = JOIN distances BY (follower1, follower2), 
+                               pairs BY (elem1.follower, elem2.follower);
+weighted_ratings = FOREACH pairs_and_distances GENERATE follower1 as login, 
+                                                        elem2.repo as repo,
                                                         elem2.rating * distance AS weighted_rating;
 store weighted_ratings into '/tmp/weighted_ratings.txt';
+-- weighted_ratings = LOAD '/tmp/weighted_ratings.txt' AS (login:chararray, repo:chararray, weighted_rating:double);
 /* Having weighted ratings, now group by follower1 and create an ordered list - his recommendations */
-recommendations = FOREACH (GROUP weighted_ratings BY follower1) {
-  sorted = ORDER weighted_ratings BY weighted_rating DESC;
+total_weighted_ratings = FOREACH (GROUP weighted_ratings BY (login, repo)) GENERATE FLATTEN(group) as (login, repo),
+                                                                    SUM(weighted_ratings.weighted_rating) AS rating_total;
+
+recommendations = FOREACH (GROUP total_weighted_ratings BY login) {
+  sorted = ORDER total_weighted_ratings BY rating_total DESC;
   top_20 = LIMIT sorted 20;
-  GENERATE group as username, top_20 as recommendations;
+  GENERATE FLATTEN(group) as login, 
+           top_20.(repo, rating_total) as recommendations;
 }
 store recommendations into '/tmp/recommendations.txt';
