@@ -14,13 +14,15 @@ bin/hadoop distcp s3n://github-explorer/WatchEvent /tmp/
 bin/hadoop distcp s3n://github-explorer/ForkEvent /tmp/
 */
 
-watch_events = LOAD '/tmp/WatchEvent';
--- watch_events = LOAD 's3://github-explorer/WatchEvent' AS (json: map[]);
+/* Watch evnts happen whenever a user 'watches' a github project */
+-- watch_events = LOAD '/tmp/WatchEvent';
+watch_events = LOAD 's3://github-explorer/WatchEvent' AS (json: map[]);
 watch_ratings = FOREACH watch_events GENERATE (chararray)$0#'actor'#'login' AS follower:chararray,
                                               (chararray)$0#'repo'#'name' AS repo:chararray,
                                               1.0 AS rating;
-fork_event = LOAD '/tmp/ForkEvent';
--- fork_event = LOAD 's3://github-explorer/ForkEvent' AS (json: map[]);
+/* Fork events happen whenever a github project is 'forked' */
+-- fork_event = LOAD '/tmp/ForkEvent';
+fork_event = LOAD 's3://github-explorer/ForkEvent' AS (json: map[]);
 fork_ratings = FOREACH fork_event GENERATE (chararray)$0#'actor'#'login' AS follower:chararray,
                                            (chararray)$0#'repo'#'name' as repo:chararray,
                                            2.0 AS rating;
@@ -44,3 +46,19 @@ distances = FOREACH (GROUP differences BY (follower1, follower2)) GENERATE FLATT
 hadoop distcp /tmp/distances.txt s3n://github-explorer/distances.txt
 */
 store distances into '/tmp/distances.txt';
+-- distances = LOAD 's3n://github-explorer/distances.txt' AS (follower1:chararray, follower2:chararray, distance:double);
+
+/* Now JOIN distances back to the pairs of co-followers to weight those ratings. */
+pairs_and_distances = JOIN distances BY (follower1, follower2), pairs BY (elem1.follower, elem2.follower);
+weighted_ratings = FOREACH pairs_and_distances GENERATE follower1, 
+                                                        follower2, 
+                                                        repo,
+                                                        elem2.rating * distance AS weighted_rating;
+store weighted_ratings into '/tmp/weighted_ratings.txt';
+/* Having weighted ratings, now group by follower1 and create an ordered list - his recommendations */
+recommendations = FOREACH (GROUP weighted_ratings BY follower1) {
+  sorted = ORDER weighted_ratings BY weighted_rating DESC;
+  top_20 = LIMIT sorted 20;
+  GENERATE group as username, top_20 as recommendations;
+}
+store recommendations into '/tmp/recommendations.txt';
