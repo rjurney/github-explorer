@@ -47,22 +47,31 @@ create_events = LOAD '/tmp/CreateEvent' as (json: map[]);
 create_ratings = FOREACH create_events GENERATE (chararray)$0#'actor_attributes'#'login' AS follower:chararray,
                                                 StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
                                                 3.0 AS rating;
+
 /* Combine all different event types into one global, bi-directional rating */
 all_ratings = UNION watch_ratings, fork_ratings, download_ratings, create_ratings; /* issues_ratings */
 all_ratings = FILTER all_ratings BY (follower IS NOT NULL) AND (repo IS NOT NULL);
-FOREACH (GROUP all_ratings BY (follower, repo)) GENERATE FLATTEN(group) AS (follower, repo), 
-                                                         SUM(rating)/COUNT_STAR(all_ratings) as rating;
+/* If there are multiple events per follower/repo pair, average them into a single value */
+all_ratings = FOREACH (GROUP all_ratings BY (follower, repo)) GENERATE FLATTEN(group) AS (follower, repo), 
+                                                                       AVG(rating) as rating;
+/* Filter the top most populate all_ratings, as their size means the computation never finishes */
 sizes = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(all_ratings), SIZE(all_ratings) AS size;
 lt_10k = FILTER sizes BY size < 10000;
-lt_10k = FOREACH lt_10k GENERATE all_ratings::repo as repo, follower as follower, rating as rating;
+lt_10k = FOREACH lt_10k GENERATE all_ratings::repo as repo, 
+                                 follower as follower, 
+                                 rating as rating;
+
+/* Make the pairs from co-membership of a repo bi-directional */
 front_pairs = FOREACH (GROUP lt_10k BY repo) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(lt_10k));
 back_pairs = FOREACH front_pairs GENERATE elem1 as elem2, elem2 as elem1;
 pairs = UNION front_pairs, back_pairs;
 /* pairs: {datafu.pig.bags.unorderedpairs_all_ratings_11::elem1: (follower: chararray,repo: chararray,rating: double),datafu.pig.bags.unorderedpairs_all_ratings_11::elem2: (follower: chararray,repo: chararray,rating: double)} */
 store pairs into '/tmp/pairs.txt';
--- (javve/list,Archonyx,1.0)	(javve/list,ACAR27,1.0)
+
 pairs = LOAD '/tmp/pairs.txt' AS (elem1:(repo:chararray, follower:chararray, rating:double), elem2:(repo:chararray, follower:chararray, rating:double));
-/* Get a distance between all github users */
+pairs = filter pairs by elem1.follower != elem2.follower;
+
+/* Get a Euclidian distance between all github users, starting with the difference squared */
 differences = FOREACH pairs GENERATE elem1.follower AS follower1, 
                                      elem2.follower AS follower2, 
                                      elem1.repo AS repo,
@@ -77,6 +86,10 @@ distances = LOAD '/tmp/distances.txt' AS (follower1:chararray, follower2:chararr
 /* Now JOIN distances back to the pairs of co-followers to weight those ratings. */
 pairs_and_distances = JOIN distances BY (follower1, follower2), 
                                pairs BY (elem1.follower, elem2.follower);
+                               
+                               
+                               
+                               
 weighted_ratings = FOREACH pairs_and_distances GENERATE follower1 as login, 
                                                         elem2.repo as repo, 
                                                         distance as distance,
