@@ -1,4 +1,3 @@
-register 'distance.py' using jython as funcs;
 register piggybank.jar
 register datafu-0.0.9-SNAPSHOT.jar;
 
@@ -9,6 +8,7 @@ rmf /tmp/differences.txt
 rmf /tmp/distances.txt
 rmf /tmp/weighted_ratings.txt
 rmf /tmp/recommendations.txt
+rmf /tmp/pairs.txt
 
 DEFINE POW org.apache.pig.piggybank.evaluation.math.POW();
 DEFINE ABS org.apache.pig.piggybank.evaluation.math.ABS();
@@ -35,40 +35,51 @@ download_ratings = FOREACH download_events GENERATE (chararray)$0#'actor_attribu
                                                     1.0 AS rating;
 
 /* Create issues events - implies a user has already downloaded/forked and tried the software */
-issues_events = LOAD '/tmp/IssuesEvent' AS (json: map[]);
+/*issues_events = LOAD '/tmp/IssuesEvent' AS (json: map[]);
 -- issues_events = LOAD 's3://github-explorer/IssuesEvent' AS (json: map[]);
 issues_ratings = FOREACH issues_events GENERATE (chararray)$0#'actor_attributes'#'login' AS follower:chararray,
                                                 StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
-                                                3.0 AS rating;
+                                                3.0 AS rating;*/
 
 /* Create repository event - strongest association with a repo possible */
 create_events = LOAD '/tmp/CreateEvent' as (json: map[]);
 -- create_events = LOAD 's3://github-explorer/CreatEvent' AS (json: map[]);
 create_ratings = FOREACH create_events GENERATE (chararray)$0#'actor_attributes'#'login' AS follower:chararray,
                                                 StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
-                                                4.0 AS rating;
+                                                3.0 AS rating;
 /* Combine all different event types into one global, bi-directional rating */
-all_ratings = UNION watch_ratings, fork_ratings, download_ratings, issues_ratings, create_ratings;
+all_ratings = UNION watch_ratings, fork_ratings, download_ratings, create_ratings; /* issues_ratings */
 all_ratings = FILTER all_ratings BY (follower IS NOT NULL) AND (repo IS NOT NULL);
-front_pairs = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(all_ratings));
+FOREACH (GROUP all_ratings BY (follower, repo)) GENERATE FLATTEN(group) AS (follower, repo), 
+                                                         SUM(rating)/COUNT_STAR(all_ratings) as rating;
+sizes = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(all_ratings), SIZE(all_ratings) AS size;
+lt_10k = FILTER sizes BY size < 10000;
+lt_10k = FOREACH lt_10k GENERATE all_ratings::repo as repo, follower as follower, rating as rating;
+front_pairs = FOREACH (GROUP lt_10k BY repo) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(lt_10k));
 back_pairs = FOREACH front_pairs GENERATE elem1 as elem2, elem2 as elem1;
 pairs = UNION front_pairs, back_pairs;
-
+/* pairs: {datafu.pig.bags.unorderedpairs_all_ratings_11::elem1: (follower: chararray,repo: chararray,rating: double),datafu.pig.bags.unorderedpairs_all_ratings_11::elem2: (follower: chararray,repo: chararray,rating: double)} */
+store pairs into '/tmp/pairs.txt';
+-- (javve/list,Archonyx,1.0)	(javve/list,ACAR27,1.0)
+pairs = LOAD '/tmp/pairs.txt' AS (elem1:(repo:chararray, follower:chararray, rating:double), elem2:(repo:chararray, follower:chararray, rating:double));
 /* Get a distance between all github users */
 differences = FOREACH pairs GENERATE elem1.follower AS follower1, 
                                      elem2.follower AS follower2, 
                                      elem1.repo AS repo,
                                      POW(ABS(elem1.rating - elem2.rating), 2.0) as difference;
 store differences into '/tmp/differences.txt';
+differences = LOAD '/tmp/differences.txt' AS (follower1:chararray, follower2:chararray, repo:chararray, difference:double);
 distances = FOREACH (GROUP differences BY (follower1, follower2)) GENERATE FLATTEN(group) AS (follower1, follower2), 
-                                                                           funcs.distance(differences) as distance;
+                                                                           1/(1 + SQRT(SUM(differences.difference))) as distance;
 store distances into '/tmp/distances.txt';
+distances = LOAD '/tmp/distances.txt' AS (follower1:chararray, follower2:chararray, distance:double);
 
 /* Now JOIN distances back to the pairs of co-followers to weight those ratings. */
 pairs_and_distances = JOIN distances BY (follower1, follower2), 
                                pairs BY (elem1.follower, elem2.follower);
 weighted_ratings = FOREACH pairs_and_distances GENERATE follower1 as login, 
-                                                        elem2.repo as repo, distance as distance,
+                                                        elem2.repo as repo, 
+                                                        distance as distance,
                                                         elem2.rating * distance AS weighted_rating;
 store weighted_ratings into '/tmp/weighted_ratings.txt';
 
