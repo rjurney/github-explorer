@@ -1,11 +1,12 @@
 register piggybank.jar
-register datafu-0.0.9-SNAPSHOT.jar;
+register datafu-0.0.9-SNAPSHOT.jar
 
 set default_parallel 50
 set mapred.child.java.opts -Xmx2048m
 
 rmf /tmp/differences.txt
 rmf /tmp/distances.txt
+rmf /tmp/ratings_and_distances.txt
 rmf /tmp/weighted_ratings.txt
 rmf /tmp/recommendations.txt
 rmf /tmp/pairs.txt
@@ -43,7 +44,7 @@ issues_ratings = FOREACH issues_events GENERATE (chararray)$0#'actor_attributes'
 
 /* Create repository event - strongest association with a repo possible */
 create_events = LOAD '/tmp/CreateEvent' as (json: map[]);
--- create_events = LOAD 's3://github-explorer/CreatEvent' AS (json: map[]);
+-- create_events = LOAD 's3://github-explorer/CreateEvent' AS (json: map[]);
 create_ratings = FOREACH create_events GENERATE (chararray)$0#'actor_attributes'#'login' AS follower:chararray,
                                                 StringConcat((chararray)$0#'repository'#'owner', '/', $0#'repository'#'name') AS repo:chararray,
                                                 3.0 AS rating;
@@ -53,9 +54,9 @@ all_ratings = UNION watch_ratings, fork_ratings, download_ratings, create_rating
 all_ratings = FILTER all_ratings BY (follower IS NOT NULL) AND (repo IS NOT NULL);
 /* If there are multiple events per follower/repo pair, average them into a single value */
 all_ratings = FOREACH (GROUP all_ratings BY (follower, repo)) GENERATE FLATTEN(group) AS (follower, repo), 
-                                                                       AVG(rating) as rating;
+                                                                       AVG(all_ratings.rating) as rating;
 /* Filter the top most populate all_ratings, as their size means the computation never finishes */
-sizes = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(all_ratings), SIZE(all_ratings) AS size;
+sizes = FOREACH (GROUP all_ratings BY repo) GENERATE FLATTEN(all_ratings), COUNT_STAR(all_ratings) AS size;
 lt_10k = FILTER sizes BY size < 10000;
 lt_10k = FOREACH lt_10k GENERATE all_ratings::repo as repo, 
                                  follower as follower, 
@@ -66,9 +67,9 @@ front_pairs = FOREACH (GROUP lt_10k BY repo) GENERATE FLATTEN(datafu.pig.bags.Un
 back_pairs = FOREACH front_pairs GENERATE elem1 as elem2, elem2 as elem1;
 pairs = UNION front_pairs, back_pairs;
 /* pairs: {datafu.pig.bags.unorderedpairs_all_ratings_11::elem1: (follower: chararray,repo: chararray,rating: double),datafu.pig.bags.unorderedpairs_all_ratings_11::elem2: (follower: chararray,repo: chararray,rating: double)} */
-store pairs into '/tmp/pairs.txt';
+-- store pairs into '/tmp/pairs.txt';
 
-pairs = LOAD '/tmp/pairs.txt' AS (elem1:(repo:chararray, follower:chararray, rating:double), elem2:(repo:chararray, follower:chararray, rating:double));
+-- pairs = LOAD '/tmp/pairs.txt' AS (elem1:(repo:chararray, follower:chararray, rating:double), elem2:(repo:chararray, follower:chararray, rating:double));
 pairs = filter pairs by elem1.follower != elem2.follower;
 
 /* Get a Euclidian distance between all github users, starting with the difference squared */
@@ -76,35 +77,33 @@ differences = FOREACH pairs GENERATE elem1.follower AS follower1,
                                      elem2.follower AS follower2, 
                                      elem1.repo AS repo,
                                      POW(ABS(elem1.rating - elem2.rating), 2.0) as difference;
-store differences into '/tmp/differences.txt';
-differences = LOAD '/tmp/differences.txt' AS (follower1:chararray, follower2:chararray, repo:chararray, difference:double);
+-- store differences into '/tmp/differences.txt';
+-- differences = LOAD '/tmp/differences.txt' AS (follower1:chararray, follower2:chararray, repo:chararray, difference:double);
 distances = FOREACH (GROUP differences BY (follower1, follower2)) GENERATE FLATTEN(group) AS (follower1, follower2), 
                                                                            1/(1 + SQRT(SUM(differences.difference))) as distance;
-store distances into '/tmp/distances.txt';
-distances = LOAD '/tmp/distances.txt' AS (follower1:chararray, follower2:chararray, distance:double);
+-- store distances into '/tmp/distances.txt';
+-- distances = LOAD '/tmp/distances.txt' AS (follower1:chararray, follower2:chararray, distance:double);
 
 /* Now JOIN distances back to the pairs of co-followers to weight those ratings. */
-pairs_and_distances = JOIN distances BY (follower1, follower2), 
-                               pairs BY (elem1.follower, elem2.follower);
-                               
-                               
-                               
-                               
-weighted_ratings = FOREACH pairs_and_distances GENERATE follower1 as login, 
-                                                        elem2.repo as repo, 
-                                                        distance as distance,
-                                                        elem2.rating * distance AS weighted_rating;
+ratings_and_distances = JOIN distances BY follower2, 
+                             lt_10k BY follower USING 'skewed' PARALLEL 100;
+-- store ratings_and_distances into '/tmp/ratings_and_distances.txt';       
+               
+weighted_ratings = FOREACH ratings_and_distances GENERATE follower1 as login, 
+                                                          repo as repo, 
+                                                          distance as distance,
+                                                          rating * distance AS weighted_rating;
 store weighted_ratings into '/tmp/weighted_ratings.txt';
-
+-- weighted_ratings = LOAD '/tmp/weighted_ratings.txt' AS (login:chararray, repo:chararray, distance:double, weighted_rating:double);
 /* Having weighted ratings, now group by follower1 and create an ordered list - the user's recommendations */
 total_weighted_ratings = FOREACH (GROUP weighted_ratings BY (login, repo)) GENERATE 
                                   FLATTEN(group) as (login, repo),
                                   SUM(weighted_ratings.weighted_rating)/SUM(weighted_ratings.distance) AS rating_total;
-
+-- total_weighted_ratings = LOAD '/tmp/total_weighted_ratings.txt' AS (login:chararray, repo:chararray, rating_total:double);
 recommendations = FOREACH (GROUP total_weighted_ratings BY login) {
   sorted = ORDER total_weighted_ratings BY rating_total DESC;
   top_20 = LIMIT sorted 20;
-  GENERATE FLATTEN(group) as login, 
+  GENERATE group as login, 
            top_20.(repo, rating_total) as recommendations;
 }
 store recommendations into '/tmp/recommendations.txt';
