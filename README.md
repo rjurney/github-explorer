@@ -20,3 +20,12 @@ Building Recommendations
 Next we use Pig and Jython to create repository recommendations for all github users.
 
 Run [recommend.pig](https://github.com/rjurney/github-explorer/blob/master/recommend.pig), which uses [distance.py](https://github.com/rjurney/github-explorer/blob/master/distance.py) to calculate a user-based recommendation. It is based on the example from Programming Collective Intelligence, albeit scaled for the size of the data (Pig, Hadoop, ElasticMapReduce). Pearson correlation coefficient are calculated between all users, and then a user's recommendations are weighted by this value.
+
+Publishing Recommendations
+--------------------------
+Next, run [load_mongo.pig](https://github.com/rjurney/github-explorer/blob/master/load_mongo.pig), which will load MongoDB with the recommendations. In addition, create the following index in MongoDB:
+
+```
+mongo recommendations
+> db.recommendations.ensureIndex({login: 1})
+```
