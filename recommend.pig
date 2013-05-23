@@ -54,20 +54,20 @@ create_ratings = FOREACH create_events GENERATE (chararray)$0#'actor_attributes'
                                                 4.0 AS rating;
 
 /* Combine all different event types into one global, bi-directional rating */
-all_ratings = UNION watch_ratings, fork_ratings; /* create_ratings, download_ratings, issues_ratings;*/
+all_ratings = UNION watch_ratings, fork_ratings, create_ratings, download_ratings, issues_ratings;
 all_ratings = FILTER all_ratings BY (follower IS NOT NULL) AND (repo IS NOT NULL);
 /* If there are multiple events per follower/repo pair, average them into a single value */
 all_ratings = FOREACH (GROUP all_ratings BY (follower, repo)) GENERATE FLATTEN(group) AS (follower, repo), 
                                                                        MAX(all_ratings.rating) as rating; /* SUM? */
 /* Filter the top most populate all_ratings, as their size means the computation never finishes */
-/*sizes = FOREACH (GROUP all_ratings BY follower) GENERATE FLATTEN(all_ratings), COUNT_STAR(all_ratings) AS size;
-lt_10k = FILTER sizes BY size < 10000;
+sizes = FOREACH (GROUP all_ratings BY follower) GENERATE FLATTEN(all_ratings), COUNT_STAR(all_ratings) AS size;
+lt_10k = FILTER sizes BY size < 1000;
 lt_10k = FOREACH lt_10k GENERATE all_ratings::repo as repo, 
                                  follower as follower, 
-                                 rating as rating;*/
+                                 rating as rating;
 
 /* Emit all co-ratings per login */
-front_pairs = FOREACH (GROUP all_ratings BY follower) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(all_ratings)) AS (elem1, elem2);
+front_pairs = FOREACH (GROUP lt_10k BY follower) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(lt_10k)) AS (elem1, elem2);
 back_pairs = FOREACH front_pairs GENERATE elem1 as elem2, elem2 as elem1;
 pairs = UNION front_pairs, back_pairs;
 --pairs = filter pairs by elem1.follower != elem2.follower;
