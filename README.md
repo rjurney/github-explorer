@@ -9,7 +9,7 @@ To fetch all data for the years 2011-2013 from Amazon S3, run: [get_all_data.rb]
 
 ETL for Pig
 -----------
-To get the JSON to load in Pig, we must format the JSON to one object per line. To achieve this, run [newline_format.rb](https://github.com/rjurney/github-explorer/blob/master/newline_format.rb). This command can be run locally.
+To get the JSON to load in Pig, we must format the JSON to one object per line. To achieve this, run [newline_format.rb](https://github.com/rjurney/github-explorer/blob/master/newline_format.rb). This command can be run locally in < a few minutes.
 
 Splitting Events by Type
 ------------------------

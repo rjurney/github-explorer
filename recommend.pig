@@ -61,13 +61,13 @@ all_ratings = FOREACH (GROUP all_ratings BY (follower, repo)) GENERATE FLATTEN(g
                                                                        MAX(all_ratings.rating) as rating; /* SUM? */
 /* Filter the top most populate all_ratings, as their size means the computation never finishes */
 sizes = FOREACH (GROUP all_ratings BY follower) GENERATE FLATTEN(all_ratings), COUNT_STAR(all_ratings) AS size;
-lt_10k = FILTER sizes BY size < 1000;
-lt_10k = FOREACH lt_10k GENERATE all_ratings::repo as repo, 
+lt_1k = FILTER sizes BY size < 1000;
+lt_1k = FOREACH lt_10k GENERATE all_ratings::repo as repo, 
                                  follower as follower, 
                                  rating as rating;
 
 /* Emit all co-ratings per login */
-front_pairs = FOREACH (GROUP lt_10k BY follower) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(lt_10k)) AS (elem1, elem2);
+front_pairs = FOREACH (GROUP lt_1k BY follower) GENERATE FLATTEN(datafu.pig.bags.UnorderedPairs(lt_1k)) AS (elem1, elem2);
 back_pairs = FOREACH front_pairs GENERATE elem1 as elem2, elem2 as elem1;
 pairs = UNION front_pairs, back_pairs;
 --pairs = filter pairs by elem1.follower != elem2.follower;
@@ -81,7 +81,8 @@ pairs = LOAD '/tmp/pairs.txt' AS (follower:chararray, repo1:chararray, repo2:cha
 
 /* Get a Pearson's correlation coefficient between all github users, in two steps (merged by Pig into one M/R job) */
 by_repos = GROUP pairs BY (repo1, repo2);
-pearson = FOREACH by_repos GENERATE FLATTEN(group) AS (repo1, repo2), udfs.pearsons(pairs.rating1, pairs.rating2) AS distance;
+gt_1 = FILTER by_repos BY SIZE(pairs) > 1;
+pearson = FOREACH gt_1 GENERATE FLATTEN(group) AS (repo1, repo2), udfs.pearsons(pairs.rating1, pairs.rating2) AS distance;
 pearson = FILTER pearson BY distance > 0;
 store pearson into '/tmp/pearson.txt';
 pearson = LOAD '/tmp/pearson.txt' AS (repo1:chararray, repo2:chararray, distance:double);
