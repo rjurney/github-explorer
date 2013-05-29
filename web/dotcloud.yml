@@ -1,0 +1,5 @@
+www:
+  type: ruby
+  config:
+    rack-env: production
+    ruby-version: ree
