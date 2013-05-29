@@ -81,7 +81,7 @@ pairs = LOAD '/tmp/pairs.txt' AS (follower:chararray, repo1:chararray, repo2:cha
 
 /* Get a Pearson's correlation coefficient between all github users, in two steps (merged by Pig into one M/R job) */
 by_repos = GROUP pairs BY (repo1, repo2);
-gt_1 = FILTER by_repos BY SIZE(pairs) > 1;
+gt_1 = FILTER by_repos BY COUNT_STAR(pairs) > 1;
 pearson = FOREACH gt_1 GENERATE FLATTEN(group) AS (repo1, repo2), udfs.pearsons(pairs.rating1, pairs.rating2) AS distance;
 pearson = FILTER pearson BY distance > 0;
 store pearson into '/tmp/pearson.txt';

@@ -1,5 +1,6 @@
 import sys
 from math import *
+
 # Derived from example in Programming Collective Intelligence
 @outputSchema("pearson:double")
 def pearsons(ratings_tuples_1, ratings_tuples_2):
@@ -34,3 +35,8 @@ def pearsons(ratings_tuples_1, ratings_tuples_2):
   if denominator == 0: return 0.0
   pearson = numerator/denominator
   return pearson
+
+# Cosine similarity
+@outputSchema("similarity:double")
+def cosine_similarity(ratings_tuples_1, ratings_tuples_2):
+  

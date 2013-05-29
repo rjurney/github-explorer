@@ -1,11 +1,11 @@
 github-explorer
 ===============
 
-Recommender system for Github, built from the archive data using [Amazon Elastic MapReduce](http://aws.amazon.com/elasticmapreduce/), [Hadoop](http://hadoop.apache.org/), [Apache Pig](http://http://pig.apache.org/), [Piggybank](https://cwiki.apache.org/confluence/display/PIG/PiggyBank), [DataFu](https://github.com/linkedin/datafu) and [Jython](http://www.jython.org/) [User Defined Functions (UDFs)](http://pig.apache.org/docs/r0.11.0/udf.html).
+This project is a recommender system for Github, built from the archive data using [Amazon Elastic MapReduce](http://aws.amazon.com/elasticmapreduce/), [Hadoop](http://hadoop.apache.org/), [Apache Pig](http://http://pig.apache.org/), [Piggybank](https://cwiki.apache.org/confluence/display/PIG/PiggyBank), [DataFu](https://github.com/linkedin/datafu) and [Jython](http://www.jython.org/) [User Defined Functions (UDFs)](http://pig.apache.org/docs/r0.11.0/udf.html).
 
 Getting the Github Data
 -----------------------
-To fetch all data for the years 2011-2013 from Amazon S3, run: [get_all_data.rb](https://github.com/rjurney/github-explorer/blob/master/get_all_data.rb) 404 errors are normal at the beginning of the download, as events only started in February but it begins iterating at the beginning of the year.
+To fetch all data for the years 2011-2013 from Amazon S3, run: [get_all_data.rb](https://github.com/rjurney/github-explorer/blob/master/get_all_data.rb). 404 errors are normal at the beginning of the download, as events only started in February but it begins iterating at the beginning of the year.
 
 ETL for Pig
 -----------
@@ -75,3 +75,10 @@ mongo recommendations
 Running the Application
 -----------------------
 Loren ipsum
+
+Bibliography
+------------
+
+[Programming Collective Intelligence](http://books.google.com/books?id=fEsZ3Ey-Hq4C&dq=programming+collective+intelligence&source=gbs_navlinks_s) page 7.
+[Recommender Systems: An Introduction](http://books.google.com/books?id=eygTJBd_U2cC&dq=recommender+systems:+an+introduction&source=gbs_navlinks_s) page 18.
+[Machine Learning in Action](http://www.manning.com/pharrington/excerpt_contents.html), Ch. 14
