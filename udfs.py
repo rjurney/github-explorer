@@ -36,9 +36,7 @@ def pearsons(ratings_tuples_1, ratings_tuples_2):
   pearson = numerator/denominator
   return pearson
 
-
-def cosine_similarity(ratings_tuples_1, ratings_tuples_2):
-  
+# Dot product
 def dot(a,b):
   n = length(a)
   sum = 0
@@ -46,6 +44,7 @@ def dot(a,b):
     sum += a[i] * b[i];
   return sum
 
+# L2 Norm
 def norm(a):
   n = length(a)
   for i in xrange(n):
