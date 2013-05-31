@@ -15,4 +15,3 @@ Dir.glob('data/*.json.gz').each do |f|
   rescue
   end
 end
-gz.close

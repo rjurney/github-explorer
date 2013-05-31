@@ -36,7 +36,28 @@ def pearsons(ratings_tuples_1, ratings_tuples_2):
   pearson = numerator/denominator
   return pearson
 
-# Cosine similarity
-@outputSchema("similarity:double")
+
 def cosine_similarity(ratings_tuples_1, ratings_tuples_2):
   
+def dot(a,b):
+  n = length(a)
+  sum = 0
+  for i in xrange(n):
+    sum += a[i] * b[i];
+  return sum
+
+def norm(a):
+  n = length(a)
+  for i in xrange(n):
+    sum += a[i] * a[i]
+  return math.sqrt(sum)
+
+# Cosine similarity
+@outputSchema("similarity:double")
+def cossim(ratings_tuples_1, ratings_tuples_2):
+  
+  # Convert to an array of numbers
+  a = [r[0] for r in ratings_tuples_1]
+  b = [r[0] for r in ratings_tuples_2]
+  
+  return dot(a,b) / (norm(a) * norm(b))
