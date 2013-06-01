@@ -5,7 +5,7 @@ register 'udfs.py' using jython as udfs;
 set default_parallel 50
 set mapred.child.java.opts -Xmx2048m
 
-rmf /tmp/pairs.txt
+--rmf /tmp/pairs.txt
 rmf /tmp/differences.txt
 rmf /tmp/distances.txt
 rmf /tmp/pearson.txt
@@ -62,7 +62,7 @@ all_ratings = FOREACH (GROUP all_ratings BY (follower, repo)) GENERATE FLATTEN(g
 /* Filter the top most populate all_ratings, as their size means the computation never finishes */
 sizes = FOREACH (GROUP all_ratings BY follower) GENERATE FLATTEN(all_ratings), COUNT_STAR(all_ratings) AS size;
 lt_1k = FILTER sizes BY size < 1000;
-lt_1k = FOREACH lt_10k GENERATE all_ratings::repo as repo, 
+lt_1k = FOREACH lt_1k GENERATE all_ratings::repo as repo, 
                                  follower as follower, 
                                  rating as rating;
 
@@ -76,21 +76,21 @@ pairs = FOREACH pairs GENERATE elem1.follower AS follower,
                                elem2.repo AS repo2,
                                elem1.rating AS rating1,
                                elem2.rating AS rating2;
-store pairs into '/tmp/pairs.txt';
+-- store pairs into '/tmp/pairs.txt';
 pairs = LOAD '/tmp/pairs.txt' AS (follower:chararray, repo1:chararray, repo2:chararray, rating1:double, rating2:double);
 
 /* Get a Pearson's correlation coefficient between all github users, in two steps (merged by Pig into one M/R job) */
 by_repos = GROUP pairs BY (repo1, repo2);
-gt_1 = FILTER by_repos BY COUNT_STAR(pairs) > 1;
-pearson = FOREACH gt_1 GENERATE FLATTEN(group) AS (repo1, repo2), udfs.pearsons(pairs.rating1, pairs.rating2) AS distance;
-pearson = FILTER pearson BY distance > 0;
-store pearson into '/tmp/pearson.txt';
-pearson = LOAD '/tmp/pearson.txt' AS (repo1:chararray, repo2:chararray, distance:double);
+gt_2 = FILTER by_repos BY COUNT_STAR(pairs) > 2;
+pearson = FOREACH gt_1 GENERATE FLATTEN(group) AS (repo1, repo2), udfs.cosine(pairs.rating1, pairs.rating2) as similarity;
+-- pearson = FILTER pearson BY distance > 0.0;
+--store pearson into '/tmp/pearson.txt';
+--pearson = LOAD '/tmp/pearson.txt' AS (repo1:chararray, repo2:chararray, distance:double);
 
 per_repo_recs = FOREACH (group pearson by repo1) {
-  sorted = ORDER pearson BY distance DESC;
+  sorted = ORDER pearson BY similarity DESC;
   top_20 = LIMIT sorted 20;
-  GENERATE group AS repo, top_20.(repo2, distance) AS recs;
+  GENERATE group AS repo, top_20.(repo2, similarity) AS recs;
 };
 
 store per_repo_recs INTO '/tmp/recommendations.txt';
@@ -98,14 +98,14 @@ store per_repo_recs INTO '/tmp/recommendations.txt';
 
 /* Now JOIN distances back to the pairs of co-followers to weight those ratings. */
 ratings_and_distances = JOIN pearson BY repo2, 
-                             lt_10k  BY repo USING 'skewed' PARALLEL 100;
-store ratings_and_distances into '/tmp/ratings_and_distances.txt';       
+                             lt_1k  BY repo USING 'skewed' PARALLEL 100;
+--store ratings_and_distances into '/tmp/ratings_and_distances.txt';       
                
 weighted_ratings = FOREACH ratings_and_distances GENERATE follower as login, 
                                                           repo as repo, 
                                                           distance as distance,
                                                           rating * distance AS weighted_rating;
-store weighted_ratings into '/tmp/weighted_ratings.txt';
+--store weighted_ratings into '/tmp/weighted_ratings.txt';
 -- weighted_ratings = LOAD '/tmp/weighted_ratings.txt' AS (login:chararray, repo:chararray, distance:double, weighted_rating:double);
 /* Having weighted ratings, now group by follower1 and create an ordered list - the user's recommendations */
 total_weighted_ratings = FOREACH (GROUP weighted_ratings BY (login, repo)) GENERATE 
