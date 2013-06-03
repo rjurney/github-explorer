@@ -38,14 +38,16 @@ def pearsons(ratings_tuples_1, ratings_tuples_2):
 
 # Average
 def avg(a):
-  sum(float(a)) / float(len(a))
+  if len(a) == 0:
+    return 0.0
+  return sum(a) / float(len(a))
 
 # Dot product
 def dot(a,b):
   n = len(a)
   _sum = 0.0
   for i in xrange(n):
-    _sum += float(a[i] - avg(a)) * float(b[i] - avg(b))
+    _sum += float(a[i]) * float(avg(b))
   return _sum
 
 # L2 Norm
@@ -53,7 +55,7 @@ def norm(a):
   n = len(a)
   _sum = 0.0
   for i in xrange(n):
-    _sum += float(a[i] - avg(a)) * float(a[i] - avg(a))
+    _sum += float(a[i]) * float(a[i])
   return sqrt(_sum)
 
 # Cosine similarity
@@ -64,4 +66,6 @@ def cosine(ratings_tuples_1, ratings_tuples_2):
   a = [r[0] for r in ratings_tuples_1]
   b = [r[0] for r in ratings_tuples_2]
   
+  if float(norm(a) * norm(b)) == 0.0:
+    return 0.0
   return float(dot(a, b)) / float(norm(a) * norm(b))
