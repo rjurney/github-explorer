@@ -73,16 +73,17 @@ pairs = FOREACH pairs GENERATE elem1.follower AS follower,
                                elem1.rating AS rating1,
                                elem2.rating AS rating2;
 
-/* STORE pairs INTO '/tmp/pairs.txt';
-pairs = LOAD '/tmp/pairs.txt' AS (follower:chararray, repo1:chararray, repo2:chararray, rating1:double, rating2:double); */
+-- STORE pairs INTO '/tmp/pairs.txt';
+--pairs = LOAD '/tmp/pairs.txt' AS (follower:chararray, repo1:chararray, repo2:chararray, rating1:double, rating2:double);
 
-/* Get a Pearson's correlation coefficient between all github users, in two steps (merged by Pig into one M/R job) */
+/* Get a Pearson's correlation coefficient between all github projects that were rated by the same person, in two steps (merged by Pig into one M/R job) */
 by_repos = GROUP pairs BY (repo1, repo2);
-gt_2 = FILTER by_repos BY COUNT_STAR(pairs) > 3;
-pearson = FOREACH gt_2 GENERATE FLATTEN(group) AS (repo1, repo2), udfs.cosine(pairs.rating1, pairs.rating2) as similarity;
+gt_5 = FILTER by_repos BY COUNT_STAR(pairs) > 5;
+pearson = FOREACH gt_5 GENERATE FLATTEN(group) AS (repo1, repo2), 
+                                udfs.cosine(pairs.rating1, pairs.rating2) as similarity;
 
-/* STORE pearson INTO '/tmp/pearson.txt';
-pearson = LOAD '/tmp/pearson.txt' AS (repo1:chararray, repo2:chararray, distance:double); */
+STORE pearson INTO '/tmp/pearson.txt';
+--pearson = LOAD '/tmp/pearson.txt' AS (repo1:chararray, repo2:chararray, similarity:double); 
 
 per_repo_recs = FOREACH (group pearson by repo1) {
   sorted = ORDER pearson BY similarity DESC;
@@ -90,7 +91,7 @@ per_repo_recs = FOREACH (group pearson by repo1) {
   GENERATE group AS repo, top_20.(repo2, similarity) AS recs;
 };
 
-store per_repo_recs INTO '/tmp/recommendations.txt';
+--store per_repo_recs INTO '/tmp/recommendations.txt';
 
 
 /* Now JOIN distances back to the pairs of co-followers to weight those ratings. */
